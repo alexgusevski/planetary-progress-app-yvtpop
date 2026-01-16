@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import { colors } from '@/styles/commonStyles';
-import { useGameState } from '@/hooks/useGameState';
+import { useGameStateContext } from '@/contexts/GameStateContext';
 import { progressNodes } from '@/data/progressNodes';
 import { formatNumber } from '@/utils/formatNumber';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -19,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 
 export default function ProgressTreeScreen() {
   const theme = useTheme();
-  const { gameState, unlockNode } = useGameState();
+  const { gameState, unlockNode } = useGameStateContext();
   const [lastUnlockedMessage, setLastUnlockedMessage] = useState<string | null>(null);
 
   const handleUnlockNode = (nodeId: string) => {

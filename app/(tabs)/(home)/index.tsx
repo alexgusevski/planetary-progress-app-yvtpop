@@ -10,13 +10,13 @@ import {
 } from 'react-native';
 import { useTheme } from '@react-navigation/native';
 import { colors } from '@/styles/commonStyles';
-import { useGameState } from '@/hooks/useGameState';
+import { useGameStateContext } from '@/contexts/GameStateContext';
 import { formatNumber, formatNumberWithCommas } from '@/utils/formatNumber';
 import * as Haptics from 'expo-haptics';
 
 export default function LabourScreen() {
   const theme = useTheme();
-  const { gameState, isLoaded, performLabour } = useGameState();
+  const { gameState, isLoaded, performLabour } = useGameStateContext();
 
   const handleLabourClick = () => {
     console.log('User tapped Perform Labour button');

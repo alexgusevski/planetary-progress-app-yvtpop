@@ -139,71 +139,76 @@ export function useGameState() {
     });
   }, []);
 
-  const unlockNode = useCallback((nodeId: string) => {
+  const unlockNode = useCallback((nodeId: string): boolean => {
     const node = progressNodes.find(n => n.id === nodeId);
     if (!node) {
       console.error('Node not found:', nodeId);
       return false;
     }
 
-    // Check conditions against current state synchronously
-    // Check if already unlocked
-    if (gameState.unlockedNodes.includes(nodeId)) {
-      console.log('Node already unlocked:', nodeId);
-      return false;
-    }
+    let success = false;
 
-    // Check if can afford
-    if (gameState.labourUnits < node.cost) {
-      console.log(`Not enough Labour Units to unlock ${nodeId}. Need ${node.cost}, have ${gameState.labourUnits}`);
-      return false;
-    }
+    setGameState(prev => {
+      // Check if already unlocked
+      if (prev.unlockedNodes.includes(nodeId)) {
+        console.log('Node already unlocked:', nodeId);
+        return prev;
+      }
 
-    // Check prerequisite
-    if (node.prerequisite && !gameState.unlockedNodes.includes(node.prerequisite)) {
-      console.log('Prerequisite not met for:', nodeId);
-      return false;
-    }
+      // Check if can afford
+      if (prev.labourUnits < node.cost) {
+        console.log(`Not enough Labour Units to unlock ${nodeId}. Need ${node.cost}, have ${prev.labourUnits}`);
+        return prev;
+      }
 
-    // All checks passed - unlock the node
-    console.log(`✓ Unlocking node: ${node.title} for ${node.cost} Labour Units`);
+      // Check prerequisite
+      if (node.prerequisite && !prev.unlockedNodes.includes(node.prerequisite)) {
+        console.log('Prerequisite not met for:', nodeId);
+        return prev;
+      }
 
-    // Calculate new state values
-    let newClickPower = gameState.clickPower;
-    let newPassiveIncome = gameState.passiveIncomePerSecond;
-    let newMultiplier = gameState.globalMultiplier;
+      // All checks passed - unlock the node
+      console.log(`✓ Unlocking node: ${node.title} for ${node.cost} Labour Units`);
 
-    // Apply benefits based on type
-    switch (node.benefit.type) {
-      case 'clickBonus':
-        newClickPower = gameState.clickPower + node.benefit.value;
-        console.log(`✓ Click power increased by +${node.benefit.value} to ${newClickPower}`);
-        break;
-      
-      case 'passiveIncome':
-        newPassiveIncome = gameState.passiveIncomePerSecond + node.benefit.value;
-        console.log(`✓ Passive income increased by +${node.benefit.value}/s to ${newPassiveIncome}/s`);
-        break;
-      
-      case 'multiplier':
-        // Multipliers should multiply the current multiplier
-        newMultiplier = gameState.globalMultiplier * node.benefit.value;
-        console.log(`✓ Global multiplier increased by ${node.benefit.value}x to ${newMultiplier.toFixed(2)}x`);
-        break;
-    }
+      // Calculate new state values
+      let newClickPower = prev.clickPower;
+      let newPassiveIncome = prev.passiveIncomePerSecond;
+      let newMultiplier = prev.globalMultiplier;
 
-    // Update state with all changes
-    setGameState(prev => ({
-      ...prev,
-      labourUnits: prev.labourUnits - node.cost,
-      unlockedNodes: [...prev.unlockedNodes, nodeId],
-      clickPower: newClickPower,
-      passiveIncomePerSecond: newPassiveIncome,
-      globalMultiplier: newMultiplier,
-    }));
+      // Apply benefits based on type
+      switch (node.benefit.type) {
+        case 'clickBonus':
+          newClickPower = prev.clickPower + node.benefit.value;
+          console.log(`✓ Click power increased by +${node.benefit.value} to ${newClickPower}`);
+          break;
+        
+        case 'passiveIncome':
+          newPassiveIncome = prev.passiveIncomePerSecond + node.benefit.value;
+          console.log(`✓ Passive income increased by +${node.benefit.value}/s to ${newPassiveIncome}/s`);
+          break;
+        
+        case 'multiplier':
+          // Multipliers should multiply the current multiplier
+          newMultiplier = prev.globalMultiplier * node.benefit.value;
+          console.log(`✓ Global multiplier increased by ${node.benefit.value}x to ${newMultiplier.toFixed(2)}x`);
+          break;
+      }
 
-    return true;
-  }, [gameState]);
+      success = true;
+
+      // Return updated state
+      return {
+        ...prev,
+        labourUnits: prev.labourUnits - node.cost,
+        unlockedNodes: [...prev.unlockedNodes, nodeId],
+        clickPower: newClickPower,
+        passiveIncomePerSecond: newPassiveIncome,
+        globalMultiplier: newMultiplier,
+      };
+    });
+
+    return success;
+  }, []);
 
   const resetGame = useCallback(async () => {
     console.log('Resetting game state');

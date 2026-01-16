@@ -41,7 +41,8 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "backendUrl": "https://feybg2ykjrqzfbhk7r3mcbmzmtt6mv3t.app.specular.dev"
     }
   },
   "scheme": "Planetary Progress"

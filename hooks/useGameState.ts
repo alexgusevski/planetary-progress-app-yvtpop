@@ -21,6 +21,7 @@ export function useGameState() {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
   const [isLoaded, setIsLoaded] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const passiveIncomeIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load game state from storage
   useEffect(() => {
@@ -28,26 +29,40 @@ export function useGameState() {
     loadGameState();
   }, []);
 
-  // Passive income ticker
+  // Passive income ticker - Fixed to properly update
   useEffect(() => {
     if (!isLoaded) return;
 
-    const interval = setInterval(() => {
-      setGameState(prev => {
-        const passiveIncome = prev.passiveIncomePerSecond * prev.globalMultiplier;
-        if (passiveIncome > 0) {
-          console.log(`Passive income tick: +${passiveIncome.toFixed(2)} Labour Units`);
-          return {
-            ...prev,
-            labourUnits: prev.labourUnits + passiveIncome,
-            totalLabourEarned: prev.totalLabourEarned + passiveIncome,
-          };
-        }
-        return prev;
-      });
-    }, 1000);
+    // Clear existing interval
+    if (passiveIncomeIntervalRef.current) {
+      clearInterval(passiveIncomeIntervalRef.current);
+    }
 
-    return () => clearInterval(interval);
+    // Only set up interval if there's passive income
+    if (gameState.passiveIncomePerSecond > 0) {
+      console.log(`Setting up passive income: ${gameState.passiveIncomePerSecond}/s with ${gameState.globalMultiplier}x multiplier`);
+      
+      passiveIncomeIntervalRef.current = setInterval(() => {
+        setGameState(prev => {
+          const passiveIncome = prev.passiveIncomePerSecond * prev.globalMultiplier;
+          if (passiveIncome > 0) {
+            console.log(`Passive income tick: +${passiveIncome.toFixed(2)} Labour Units`);
+            return {
+              ...prev,
+              labourUnits: prev.labourUnits + passiveIncome,
+              totalLabourEarned: prev.totalLabourEarned + passiveIncome,
+            };
+          }
+          return prev;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (passiveIncomeIntervalRef.current) {
+        clearInterval(passiveIncomeIntervalRef.current);
+      }
+    };
   }, [isLoaded, gameState.passiveIncomePerSecond, gameState.globalMultiplier]);
 
   // Auto-save
@@ -105,7 +120,7 @@ export function useGameState() {
         lastSaveTime: Date.now(),
       };
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
-      console.log('Game state saved');
+      console.log('Game state saved successfully');
     } catch (error) {
       console.error('Failed to save game state:', error);
     }
@@ -115,6 +130,7 @@ export function useGameState() {
     console.log('User performed labour (clicked button)');
     setGameState(prev => {
       const labourGained = prev.clickPower * prev.globalMultiplier;
+      console.log(`Labour gained from click: ${labourGained.toFixed(2)} (${prev.clickPower} × ${prev.globalMultiplier})`);
       return {
         ...prev,
         labourUnits: prev.labourUnits + labourGained,
@@ -130,52 +146,63 @@ export function useGameState() {
       return false;
     }
 
-    if (gameState.unlockedNodes.includes(nodeId)) {
-      console.log('Node already unlocked:', nodeId);
-      return false;
-    }
-
-    if (gameState.labourUnits < node.cost) {
-      console.log('Not enough Labour Units to unlock:', nodeId);
-      return false;
-    }
-
-    // Check prerequisite
-    if (node.prerequisite && !gameState.unlockedNodes.includes(node.prerequisite)) {
-      console.log('Prerequisite not met for:', nodeId);
-      return false;
-    }
-
-    console.log(`Unlocking node: ${node.title} for ${node.cost} Labour Units`);
+    // Use a flag to track success
+    let unlockSuccess = false;
 
     setGameState(prev => {
+      // Check if already unlocked
+      if (prev.unlockedNodes.includes(nodeId)) {
+        console.log('Node already unlocked:', nodeId);
+        return prev;
+      }
+
+      // Check if can afford
+      if (prev.labourUnits < node.cost) {
+        console.log(`Not enough Labour Units to unlock ${nodeId}. Need ${node.cost}, have ${prev.labourUnits}`);
+        return prev;
+      }
+
+      // Check prerequisite
+      if (node.prerequisite && !prev.unlockedNodes.includes(node.prerequisite)) {
+        console.log('Prerequisite not met for:', nodeId);
+        return prev;
+      }
+
+      console.log(`✓ Unlocking node: ${node.title} for ${node.cost} Labour Units`);
+
+      // Deduct cost and add to unlocked nodes
       let newState = {
         ...prev,
         labourUnits: prev.labourUnits - node.cost,
         unlockedNodes: [...prev.unlockedNodes, nodeId],
       };
 
-      // Apply benefits
+      // Apply benefits based on type
       switch (node.benefit.type) {
         case 'clickBonus':
           newState.clickPower = prev.clickPower + node.benefit.value;
-          console.log(`Click power increased by ${node.benefit.value} to ${newState.clickPower}`);
+          console.log(`✓ Click power increased by +${node.benefit.value} to ${newState.clickPower}`);
           break;
+        
         case 'passiveIncome':
           newState.passiveIncomePerSecond = prev.passiveIncomePerSecond + node.benefit.value;
-          console.log(`Passive income increased by ${node.benefit.value}/s to ${newState.passiveIncomePerSecond}/s`);
+          console.log(`✓ Passive income increased by +${node.benefit.value}/s to ${newState.passiveIncomePerSecond}/s`);
           break;
+        
         case 'multiplier':
+          // Multipliers should multiply the current multiplier
+          // e.g., 1.25x means multiply by 1.25, so 1.0 * 1.25 = 1.25
           newState.globalMultiplier = prev.globalMultiplier * node.benefit.value;
-          console.log(`Global multiplier increased by ${node.benefit.value}x to ${newState.globalMultiplier.toFixed(2)}x`);
+          console.log(`✓ Global multiplier increased by ${node.benefit.value}x to ${newState.globalMultiplier.toFixed(2)}x`);
           break;
       }
 
+      unlockSuccess = true;
       return newState;
     });
 
-    return true;
-  }, [gameState]);
+    return unlockSuccess;
+  }, []);
 
   const resetGame = useCallback(async () => {
     console.log('Resetting game state');
